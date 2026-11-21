@@ -8,9 +8,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
+use App\Models\Scopes\ReceptionistBranchScope;
+use App\Models\Scopes\DoctorAppointmentScope;
 
 class Appointment extends Model
 {
+
+
+    protected static function booted(): void 
+    {
+     static::addGlobalScope(new ReceptionistBranchScope);
+     static::addGlobalScope(new DoctorAppointmentScope);
+    }
+
+
     protected $fillable = [
         'patient_id',
         'doctor_id',
@@ -61,4 +72,6 @@ class Appointment extends Model
     {
         return $this->morphMany(AuditLog::class, 'auditable');
     }
+
+   
 }

@@ -93,4 +93,42 @@ class ModelRelationshipsTest extends TestCase
         $this->assertInstanceOf(BelongsToMany::class, $user->branches());
         $this->assertInstanceOf(HasMany::class, $user->auditLogs());
     }
+
+public function test_audit_logs_can_belong_to_different_models(): void
+{
+    $appointment = new \App\Models\Appointment();
+
+    $appointment->setRelation('auditLogs', collect());
+
+    $auditLog = new \App\Models\AuditLog();
+
+    $auditLog->auditable()->associate($appointment);
+
+    $this->assertSame(
+        \App\Models\Appointment::class,
+        $auditLog->auditable_type
+    );
+
+    $this->assertSame(
+        $appointment,
+        $auditLog->auditable
+    );
+
+    $record = new \App\Models\MedicalRecord();
+
+    $secondLog = new \App\Models\AuditLog();
+
+    $secondLog->auditable()->associate($record);
+
+    $this->assertSame(
+        \App\Models\MedicalRecord::class,
+        $secondLog->auditable_type
+    );
+
+    $this->assertSame(
+        $record,
+        $secondLog->auditable
+    );
+}
+
 }
