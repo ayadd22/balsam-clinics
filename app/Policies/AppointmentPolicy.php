@@ -40,14 +40,16 @@ class AppointmentPolicy
         return false;
     }
 
+    
     public function create(User $user): bool
     {
         return in_array($user->role, [
-            UserRole::ADMIN,
-            UserRole::RECEPTIONIST,
-        ]);
-    }
-
+          UserRole::ADMIN,
+          UserRole::RECEPTIONIST,
+          UserRole::PATIENT,
+       ]);
+     }
+    
     public function update(User $user, Appointment $appointment): bool
     {
         if ($user->role === UserRole::ADMIN) {
