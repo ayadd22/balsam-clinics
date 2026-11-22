@@ -31,4 +31,19 @@ class AuditLog extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    protected static function booted(): void
+    {
+        static::updating(function (AuditLog $auditLog) {
+            throw new \LogicException(
+                'Audit logs cannot be modified.'
+            );
+        });
+
+        static::deleting(function (AuditLog $auditLog) {
+            throw new \LogicException(
+                'Audit logs cannot be deleted.'
+            );
+        });
+    }
 }
