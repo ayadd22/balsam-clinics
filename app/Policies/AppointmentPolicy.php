@@ -69,4 +69,24 @@ class AppointmentPolicy
     {
         return $user->role === UserRole::ADMIN;
     }
+
+
+    public function cancel(User $user, Appointment $appointment): bool
+    {
+    if ($user->role === UserRole::ADMIN) {
+        return true;
+    }
+
+    if ($user->role === UserRole::PATIENT) {
+        return $user->patient?->id === $appointment->patient_id;
+    }
+
+    if ($user->role === UserRole::RECEPTIONIST) {
+        return $user->branches()
+            ->where('branches.id', $appointment->branch_id)
+            ->exists();
+    }
+
+    return false;
+   } 
 }

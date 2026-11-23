@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use App\Models\Scopes\ReceptionistBranchScope;
 use App\Models\Scopes\DoctorAppointmentScope;
+use Illuminate\Database\Eloquent\Builder;
 
 class Appointment extends Model
 {
@@ -42,6 +43,39 @@ class Appointment extends Model
             'status' => AppointmentStatus::class,
         ];
     }
+
+
+    public function scopeForDoctor(
+    Builder $query,
+    int $doctorId
+): Builder {
+    return $query->where('doctor_id', $doctorId);
+}
+
+public function scopeForBranch(
+    Builder $query,
+    int $branchId
+): Builder {
+    return $query->where('branch_id', $branchId);
+}
+
+public function scopeOnDate(
+    Builder $query,
+    string $date
+): Builder {
+    return $query->whereDate('appointment_date', $date);
+}
+
+public function scopeWithStatus(
+    Builder $query,
+    AppointmentStatus|string $status
+): Builder {
+    $value = $status instanceof AppointmentStatus
+        ? $status->value
+        : $status;
+
+    return $query->where('status', $value);
+}
 
     public function patient(): BelongsTo
     {

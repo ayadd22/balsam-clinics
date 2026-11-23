@@ -6,6 +6,7 @@ use App\Enums\Specialty;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Builder;
 
 class Doctor extends Model
 {
@@ -24,6 +25,32 @@ class Doctor extends Model
             'is_active' => 'boolean',
         ];
     }
+
+    public function scopeActive(Builder $query): Builder
+{
+    return $query->where('is_active', true);
+}
+
+public function scopeOfSpecialty(
+    Builder $query,
+    Specialty|string $specialty
+): Builder {
+    $value = $specialty instanceof Specialty
+        ? $specialty->value
+        : $specialty;
+
+    return $query->where('specialty', $value);
+}
+
+public function scopeAtBranch(
+    Builder $query,
+    int $branchId
+): Builder {
+    return $query->whereHas('schedules', function (Builder $query) use ($branchId) {
+        $query->where('branch_id', $branchId)
+            ->where('is_active', true);
+    });
+}
 
     public function user(): BelongsTo
     {

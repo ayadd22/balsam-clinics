@@ -9,6 +9,8 @@ use App\Http\Requests\StoreAppointmentRequest;
 use App\Models\Patient;
 use App\Services\AppointmentService;
 use App\Http\Resources\AppointmentResource;
+use App\Http\Requests\CheckAppointmentAvailabilityRequest;
+use App\Services\AppointmentAvailabilityService;
 
 class AppointmentController extends Controller
 {
@@ -47,4 +49,50 @@ class AppointmentController extends Controller
         201
        );
     }
+
+   public function cancel(
+    \Illuminate\Http\Request $request,
+    \App\Models\Appointment $appointment,
+    AppointmentService $appointmentService
+    ) {
+    if (!$request->user()->can('cancel', $appointment)) {
+        return ApiResponse::error(
+            'You are not authorized to cancel this appointment.',
+            403
+        );
+    }
+
+    $appointment = $appointmentService->cancel($appointment);
+
+    return ApiResponse::success(
+        new AppointmentResource(
+            $appointment->load(['patient', 'doctor.user', 'branch'])
+        ),
+        'Appointment cancelled successfully.'
+    );
+  }
+
+public function availability(
+    CheckAppointmentAvailabilityRequest $request,
+    AppointmentAvailabilityService $availabilityService
+) {
+    $data = $request->validated();
+
+    $available = $availabilityService->isAvailable(
+        (int) $data['doctor_id'],
+        (int) $data['branch_id'],
+        $data['appointment_date'],
+        $data['start_time'],
+        $data['end_time']
+    );
+
+    return ApiResponse::success(
+        ['available' => $available],
+        $available
+            ? 'The requested appointment time is available.'
+            : 'The requested appointment time is not available.'
+    );
+}
+
+
 }

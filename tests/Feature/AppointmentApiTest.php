@@ -13,6 +13,7 @@ use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
+use App\Services\AppointmentService;
 
 class AppointmentApiTest extends TestCase
 {
@@ -60,13 +61,14 @@ class AppointmentApiTest extends TestCase
             'phone' => '0999999999',
         ]);
 
-        return compact(
+       return compact(
             'date',
             'branch',
             'doctor',
+            'doctorUser',
             'patient',
             'patientUser'
-        );
+         );
     }
 
     private function bookingData(array $context): array
@@ -102,26 +104,26 @@ class AppointmentApiTest extends TestCase
     }
 
     public function test_patient_cannot_choose_another_patient_id(): void
-    {
-        $context = $this->createBookingContext();
+{
+    $context = $this->createBookingContext();
 
-        $anotherPatient = Patient::create([
-            'full_name' => 'Another Patient',
-            'phone' => '0988888888',
-        ]);
+    $anotherPatient = Patient::create([
+        'full_name' => 'Another Patient',
+        'phone' => '0988888888',
+    ]);
 
-        Sanctum::actingAs($context['patientUser']);
+    Sanctum::actingAs($context['patientUser']);
 
-        $data = $this->bookingData($context);
-        $data['patient_id'] = $anotherPatient->id;
+    $data = $this->bookingData($context);
+    $data['patient_id'] = $anotherPatient->id;
 
-        $response = $this->postJson('/api/appointments', $data);
+    $response = $this->postJson('/api/appointments', $data);
 
-        $response->assertUnprocessable();
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors('patient_id');
 
-        $this->assertDatabaseCount('appointments', 0);
-    }
-
+    $this->assertDatabaseCount('appointments', 0);
+}
     public function test_admin_can_book_appointment_for_a_patient(): void
     {
         $context = $this->createBookingContext();
@@ -153,6 +155,7 @@ class AppointmentApiTest extends TestCase
             'role' => UserRole::RECEPTIONIST,
         ]);
 
+        $receptionist->branches()->attach($context['branch']->id);
         Sanctum::actingAs($receptionist);
 
         $data = $this->bookingData($context);
@@ -199,5 +202,159 @@ class AppointmentApiTest extends TestCase
 
         $this->assertDatabaseCount('appointments', 0);
     }
+    public function test_receptionist_cannot_book_at_unassigned_branch(): void
+{
+    $context = $this->createBookingContext();
+
+    $receptionist = User::factory()->create([
+        'role' => UserRole::RECEPTIONIST,
+    ]);
+
+    Sanctum::actingAs($receptionist);
+
+    $data = $this->bookingData($context);
+    $data['patient_id'] = $context['patient']->id;
+
+    $response = $this->postJson('/api/appointments', $data);
+
+    $response->assertUnprocessable()
+        ->assertJsonValidationErrors('branch_id');
+
+    $this->assertDatabaseCount('appointments', 0);
+}
+private function createAppointment(array $context): Appointment
+{
+    return app(AppointmentService::class)->create(
+        $context['patient'],
+        $this->bookingData($context)
+    );
+}
+public function test_patient_can_cancel_their_own_appointment(): void
+{
+    $context = $this->createBookingContext();
+    $appointment = $this->createAppointment($context);
+
+    Sanctum::actingAs($context['patientUser']);
+
+    $response = $this->patchJson(
+        "/api/appointments/{$appointment->id}/cancel"
+    );
+
+    $response->assertOk();
+
+    $this->assertDatabaseHas('appointments', [
+        'id' => $appointment->id,
+        'status' => 'cancelled',
+    ]);
+}
+public function test_patient_cannot_cancel_another_patients_appointment(): void
+{
+    $context = $this->createBookingContext();
+    $appointment = $this->createAppointment($context);
+
+    $anotherPatient = User::factory()->create([
+        'role' => UserRole::PATIENT,
+    ]);
+
+    $anotherPatient->patient()->create([
+        'full_name' => 'Another Patient',
+        'phone' => '0988888888',
+    ]);
+
+    Sanctum::actingAs($anotherPatient);
+
+    $response = $this->patchJson(
+        "/api/appointments/{$appointment->id}/cancel"
+    );
+
+    $response->assertForbidden();
+
+    $this->assertDatabaseHas('appointments', [
+        'id' => $appointment->id,
+        'status' => 'booked',
+    ]);
+}
+public function test_receptionist_can_cancel_appointment_in_assigned_branch(): void
+{
+    $context = $this->createBookingContext();
+    $appointment = $this->createAppointment($context);
+
+    $receptionist = User::factory()->create([
+        'role' => UserRole::RECEPTIONIST,
+    ]);
+
+    $receptionist->branches()->attach($context['branch']->id);
+
+    Sanctum::actingAs($receptionist);
+
+    $response = $this->patchJson(
+        "/api/appointments/{$appointment->id}/cancel"
+    );
+
+    $response->assertOk();
+
+    $this->assertDatabaseHas('appointments', [
+        'id' => $appointment->id,
+        'status' => 'cancelled',
+    ]);
+}
+public function test_receptionist_cannot_cancel_appointment_in_unassigned_branch(): void
+{
+    $context = $this->createBookingContext();
+    $appointment = $this->createAppointment($context);
+
+    $receptionist = User::factory()->create([
+        'role' => UserRole::RECEPTIONIST,
+    ]);
+
+    Sanctum::actingAs($receptionist);
+
+    $response = $this->patchJson(
+        "/api/appointments/{$appointment->id}/cancel"
+    );
+
+   $response->assertNotFound();
+
+    $this->assertDatabaseHas('appointments', [
+        'id' => $appointment->id,
+        'status' => 'booked',
+    ]);
+}
+public function test_doctor_cannot_cancel_appointment(): void
+{
+    $context = $this->createBookingContext();
+    $appointment = $this->createAppointment($context);
+
+    Sanctum::actingAs($context['doctorUser']);
+
+    $response = $this->patchJson(
+        "/api/appointments/{$appointment->id}/cancel"
+    );
+
+    $response->assertForbidden();
+
+    $this->assertDatabaseHas('appointments', [
+        'id' => $appointment->id,
+        'status' => 'booked',
+    ]);
+}
+public function test_guest_cannot_cancel_appointment(): void
+{
+    $context = $this->createBookingContext();
+    $appointment = $this->createAppointment($context);
+
+    $response = $this->patchJson(
+        "/api/appointments/{$appointment->id}/cancel"
+    );
+
+    $response->assertUnauthorized();
+
+    $this->assertDatabaseHas('appointments', [
+        'id' => $appointment->id,
+        'status' => 'booked',
+    ]);
+}
+
+
 }
 

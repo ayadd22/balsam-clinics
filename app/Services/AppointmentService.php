@@ -11,6 +11,8 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use App\Events\AppointmentBooked;
+use App\Events\AppointmentCancelled;
 
 class AppointmentService
 {
@@ -18,7 +20,7 @@ class AppointmentService
     {
         return DB::transaction(function () use ($patient, $data) {
 
-            // Lock patient and doctor to reduce concurrent booking conflicts.
+         
             $patient = Patient::query()
                 ->lockForUpdate()
                 ->findOrFail($patient->id);
@@ -27,7 +29,6 @@ class AppointmentService
                 ->lockForUpdate()
                 ->findOrFail($data['doctor_id']);
 
-            // 1. Check patient booking restriction.
             if (
                 $patient->is_booking_blocked &&
                 (
@@ -40,7 +41,6 @@ class AppointmentService
                 ]);
             }
 
-            // 2. Check doctor and appointment date.
             if (!$doctor->is_active) {
                 throw ValidationException::withMessages([
                     'doctor_id' => 'This doctor is not active.',
@@ -64,7 +64,7 @@ class AppointmentService
                 ]);
             }
 
-            // 3. Check doctor's schedule at the selected branch and day.
+         
             $dayOfWeek = strtolower($date->format('l'));
 
             $hasSchedule = DoctorSchedule::query()
@@ -82,7 +82,7 @@ class AppointmentService
                 ]);
             }
 
-            // 4. Check doctor overlapping appointments.
+    
             $doctorHasConflict = Appointment::withoutGlobalScopes()
                 ->where('doctor_id', $doctor->id)
                 ->whereDate('appointment_date', $date->toDateString())
@@ -97,7 +97,7 @@ class AppointmentService
                 ]);
             }
 
-            // 5. Check patient overlapping appointments.
+        
             $patientHasConflict = Appointment::withoutGlobalScopes()
                 ->where('patient_id', $patient->id)
                 ->whereDate('appointment_date', $date->toDateString())
@@ -112,22 +112,51 @@ class AppointmentService
                 ]);
             }
 
-            // 6. Create appointment.
-            return Appointment::create([
-                'patient_id' => $patient->id,
-                'doctor_id' => $doctor->id,
-                'branch_id' => $data['branch_id'],
-                'appointment_date' => $date->toDateString(),
-                'start_time' => $startTime,
-                'end_time' => $endTime,
-                'status' => AppointmentStatus::BOOKED,
-                'reference_number' => 'APT-' . Str::upper(Str::random(12)),
+       
+            $appointment = Appointment::create([
+               'patient_id' => $patient->id,
+               'doctor_id' => $doctor->id,
+               'branch_id' => $data['branch_id'],
+               'appointment_date' => $date->toDateString(),
+               'start_time' => $startTime,
+               'end_time' => $endTime,
+               'status' => AppointmentStatus::BOOKED,
+               'reference_number' => 'APT-' . Str::upper(Str::random(12)),
             ]);
-        });
+
+             AppointmentBooked::dispatch($appointment);
+
+             return $appointment;
+          });
     }
 
     private function normalizeTime(string $time): string
     {
         return Carbon::parse($time)->format('H:i:s');
     }
+
+
+    public function cancel(Appointment $appointment): Appointment
+{
+    return DB::transaction(function () use ($appointment) {
+
+        $appointment = Appointment::withoutGlobalScopes()
+            ->lockForUpdate()
+            ->findOrFail($appointment->id);
+
+        if ($appointment->status !== AppointmentStatus::BOOKED) {
+            throw ValidationException::withMessages([
+                'appointment' => 'Only booked appointments can be cancelled.',
+            ]);
+        }
+
+        $appointment->update([
+            'status' => AppointmentStatus::CANCELLED,
+        ]);
+
+        AppointmentCancelled::dispatch($appointment);
+
+        return $appointment;
+    });
+}
 }

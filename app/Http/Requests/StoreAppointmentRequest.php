@@ -5,6 +5,8 @@ namespace App\Http\Requests;
 use App\Enums\UserRole;
 use App\Models\Appointment;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Validator;
+
 
 class StoreAppointmentRequest extends FormRequest
 {
@@ -60,4 +62,27 @@ class StoreAppointmentRequest extends FormRequest
 
         return $rules;
     }
+
+    public function withValidator(Validator $validator): void
+    {
+    $validator->after(function (Validator $validator) {
+        $user = $this->user();
+
+        if (
+            $user?->role === UserRole::RECEPTIONIST &&
+            $this->filled('branch_id')
+        ) {
+            $hasBranchAccess = $user->branches()
+                ->where('branches.id', $this->input('branch_id'))
+                ->exists();
+
+            if (!$hasBranchAccess) {
+                $validator->errors()->add(
+                    'branch_id',
+                    'You are not assigned to this branch.'
+                );
+            }
+        }
+    });
+  }
 }
