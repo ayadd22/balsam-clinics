@@ -25,4 +25,15 @@ class LogSmsService implements SmsServiceInterface
             'message' => 'Your appointment has been cancelled.',
         ]);
     }
+
+    public function sendAppointmentReminder(Appointment $appointment): void
+{
+    Log::info('Appointment reminder SMS', [
+        'phone' => $appointment->patient->phone,
+        'reference_number' => $appointment->reference_number,
+        'appointment_date' => $appointment->appointment_date->toDateString(),
+        'start_time' => $appointment->start_time,
+        'message' => 'Reminder: You have an appointment tomorrow.',
+    ]);
+}
 }
