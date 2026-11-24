@@ -21,7 +21,7 @@ class AppointmentController extends Controller
         $user = $request->user();
         $data = $request->validated();
 
-        // Patients can only book for themselves.
+        
         if ($user->role === UserRole::PATIENT) {
             $patient = $user->patient;
 
@@ -32,7 +32,7 @@ class AppointmentController extends Controller
                 );
             }
         } else {
-            // Admin and receptionist can book for another patient.
+           
             $patient = Patient::findOrFail($data['patient_id']);
         }
 

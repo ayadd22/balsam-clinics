@@ -65,7 +65,8 @@ class AppointmentReminderService
             }
 
             SendAppointmentReminderJob::dispatch($reminder->id)
-                ->onQueue('high');
+                ->onQueue('low')
+                ->afterCommit();
 
             $created++;
         }

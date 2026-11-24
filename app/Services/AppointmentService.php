@@ -14,6 +14,7 @@ use Illuminate\Validation\ValidationException;
 use App\Events\AppointmentBooked;
 use App\Events\AppointmentCancelled;
 
+
 class AppointmentService
 {
     public function create(Patient $patient, array $data): Appointment
@@ -121,7 +122,7 @@ class AppointmentService
                'start_time' => $startTime,
                'end_time' => $endTime,
                'status' => AppointmentStatus::BOOKED,
-               'reference_number' => 'APT-' . Str::upper(Str::random(12)),
+               
             ]);
 
              AppointmentBooked::dispatch($appointment);
